@@ -102,7 +102,7 @@ query = (faf.FAFQuery()
     .origin_states(['California'])
     .destination_states(['Texas'])
     .commodities(['Electronics'])
-    .years([2017, 2020, 2024, 2030])
+    .year_range(2017, 2024)
 )
 
 # Wide format: tons_2017, tons_2020, tons_2024, tons_2030 columns
@@ -184,7 +184,7 @@ network = (faf.NetworkQuery()
 )
 
 gdf = network.get()
-print(f"Total length: {network.total_length()} miles")
+print(f"Total length: {network.total_length():,.0f} miles")
 ```
 
 **Available methods**:
@@ -232,8 +232,8 @@ electronics = base.commodities(['Electronics'])
 pharma = base.commodities(['Pharmaceuticals'])
 
 # Different results - base query unchanged
-df1 = electronics.get()
-df2 = pharma.get()
+df1 = electronics.get()  # Slower
+df2 = pharma.get()  # Faster!
 ```
 
 ### Caching
@@ -266,16 +266,58 @@ custom = query.group_by(
 )
 ```
 
-## Data Setup
+## Data Setup and Management
 
-First-time setup downloads FAF5 data (~2GB):
+The `tidyfaf` package expects FAF5 data files to be located in `~/.tidyfaf_data/` by default. This ensures data is stored separately from the package installation and is accessible across sessions.
+
+### Automatic Initial Download
+
+Upon the first import of `tidyfaf` (e.g., `import tidyfaf`), the package will check if the core FAF data (`FAF5_metadata.xlsx` and main regional/state flow files) are present in `~/.tidyfaf_data/`. If they are missing, the package will attempt to automatically download and process these files from their official sources (faf.ornl.gov, bts.gov).
+
+This process can take several minutes depending on your internet connection and will print status updates to the console.
+
+### Handling County Factors (Manual Setup Option)
+
+While the core FAF data is downloaded automatically, the download of **County-Level Disaggregation Factors** (`All_Experimental_Disaggregation_Factors.zip`) can sometimes be unreliable due to strict server-side restrictions on government websites, leading to `ConnectionResetError` or `HTTP 403 Forbidden` errors.
+
+If you encounter issues with the automatic download of county factors, you can perform a manual setup:
+
+1.  **Manually Download the Zip File:**
+    *   Visit the official source: `https://faf.ornl.gov/faf5/Data/County/All_Experimental_Disaggregation_Factors.zip`
+    *   Download this zip file to your local machine.
+
+2.  **Use `tidyfaf.setup_county_data()`:**
+    Once downloaded, use the provided utility function to process the data into the correct location:
+    ```python
+    import tidyfaf as faf
+    from pathlib import Path
+
+    # Assuming the downloaded zip file is in your current working directory
+    # or provide the full path to where you saved it.
+    zip_file_path = Path("./All_Experimental_Disaggregation_Factors.zip") 
+
+    if zip_file_path.exists():
+        faf.setup_county_data(zip_file_path)
+        print("County factor data successfully set up.")
+    else:
+        print(f"Error: {zip_file_path} not found. Please ensure the file is downloaded.")
+    ```
+    This function will extract the zip file, convert the contained CSV factors into optimized Parquet format, and store them in `~/.tidyfaf_data/county_factors/`, making them ready for use with `tidyfaf.CountyQuery`.
+
+### Clearing Cached Data
+
+For development or to force a fresh download, you can clear the package's internal data caches:
 
 ```python
 import tidyfaf as faf
-faf.download_and_process()
-```
 
-Data is stored in `~/.tidyfaf_data/` by default.
+# Clear only query results cache (keeps raw data)
+faf.clear_cache()
+
+# Clear all caches, including raw downloaded data files
+# This will force a re-download of core FAF data on next import/query.
+faf.clear_all_caches()
+```
 
 ## Examples
 
@@ -351,6 +393,7 @@ See [documentation](https://tidyfaf.readthedocs.io) for complete API reference.
 - **FAF5.7.1** (FHWA/BTS) - Regional and state-level freight flows
 - **FAF5 Network** (FHWA) - Highway network with freight designations
 - **FAF5 HiLo Forecasts** - Base/high/low growth scenarios
+- **FAF5 County Factors** (FHWA/BTS) - Experimental county-level disaggregation factors
 
 ## Contributing
 
@@ -368,6 +411,6 @@ If you use this package in research, please cite:
 @software{tidyfaf2025,
   title = {tidyfaf: Tidy access to FAF freight flow data},
   year = {2025},
-  url = {https://github.com/darshanpandit/tidyfaf}
+  url = {https://github.com/yourusername/tidyfaf}
 }
 ```
