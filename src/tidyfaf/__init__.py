@@ -26,11 +26,11 @@ Examples
 """
 
 # Query builders (primary API)
-from .query import FAFQuery, StateQuery, NetworkQuery, ForecastQuery
+from .query import FAFQuery, StateQuery, NetworkQuery, ForecastQuery, CountyQuery
 
 # Global discovery functions
 from .metadata import FAFMetadata
-from .download import download_and_process
+from .download import download_and_process, setup_county_data
 from pathlib import Path
 import sys
 
@@ -165,7 +165,7 @@ from .download import download_and_process
 from .query.cache import clear_cache, clear_all_caches
 
 # Version
-__version__ = '0.1.3'
+__version__ = '0.1.4'
 
 __all__ = [
     # Query builders (primary API)
@@ -173,6 +173,7 @@ __all__ = [
     'StateQuery',
     'NetworkQuery',
     'ForecastQuery',
+    'CountyQuery',
 
     # Discovery functions
     'available_commodities',
@@ -183,6 +184,7 @@ __all__ = [
     # Utilities
     'FlowMap',
     'download_and_process',
+    'setup_county_data',
     'clear_cache',
     'clear_all_caches',
 

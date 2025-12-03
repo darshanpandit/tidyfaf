@@ -3,16 +3,26 @@ import subprocess
 import zipfile
 from pathlib import Path
 
-def download_file(url, dest_path):
+def download_file(url, dest_path, retries=3):
     print(f"Downloading {url} to {dest_path}...")
     import urllib.request
-    try:
-        with urllib.request.urlopen(url) as response, open(dest_path, 'wb') as out_file:
-            shutil.copyfileobj(response, out_file)
-        print("Download complete.")
-    except Exception as e:
-        print(f"Error downloading {url}: {e}")
-        raise
+    import time
+    
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) tidyfaf/0.1.3'}
+    req = urllib.request.Request(url, headers=headers)
+    
+    for attempt in range(retries):
+        try:
+            with urllib.request.urlopen(req) as response, open(dest_path, 'wb') as out_file:
+                shutil.copyfileobj(response, out_file)
+            print("Download complete.")
+            return
+        except Exception as e:
+            print(f"Error downloading {url} (Attempt {attempt+1}/{retries}): {e}")
+            if attempt < retries - 1:
+                time.sleep(2 * (attempt + 1)) # Backoff
+            else:
+                raise
 
 def extract_zip(zip_path, extract_to):
     print(f"Extracting {zip_path} to {extract_to}...")
@@ -29,6 +39,64 @@ import pandas as pd
 import geopandas as gpd
 import pyogrio
 import shutil
+
+def setup_county_data(zip_path):
+    """
+    Manually setup county data from a downloaded zip file.
+    
+    Parameters
+    ----------
+    zip_path : str or Path
+        Path to the 'All_Experimental_Disaggregation_Factors.zip' file.
+    """
+    zip_path = Path(zip_path)
+    if not zip_path.exists():
+        raise FileNotFoundError(f"Zip file not found: {zip_path}")
+        
+    data_dir = Path.home() / ".tidyfaf_data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    
+    print(f"Extracting {zip_path}...")
+    extract_zip(zip_path, data_dir)
+    
+    # Organize
+    factors_dir = data_dir / "county_factors"
+    factors_dir.mkdir(exist_ok=True)
+    
+    print("Processing county factor CSVs...")
+    # The zip extracts into a subfolder usually. Search recursively.
+    # Pattern: FAF5_Exp_Disagg_Factors_*.csv or faf5_cat_factors_*.csv (depending on version)
+    
+    processed_count = 0
+    for csv_file in data_dir.rglob("*.csv"):
+        if "factor" in csv_file.name.lower() and ("orig" in csv_file.name.lower() or "dest" in csv_file.name.lower()):
+            parquet_name = csv_file.stem + ".parquet"
+            parquet_path = factors_dir / parquet_name
+            
+            if not parquet_path.exists():
+                print(f"Converting {csv_file.name} to Parquet...")
+                try:
+                    df = pd.read_csv(csv_file)
+                    df.to_parquet(parquet_path)
+                    print(f"Saved {parquet_path.name}")
+                    processed_count += 1
+                except Exception as e:
+                    print(f"Error converting {csv_file.name}: {e}")
+            
+            # Clean up CSV to save space
+            csv_file.unlink()
+            
+    # Clean up empty extracted directories if any
+    for item in data_dir.iterdir():
+        if item.is_dir() and item.name != "county_factors" and "factor" in item.name.lower():
+             # Check if empty
+             if not any(item.iterdir()):
+                 item.rmdir()
+
+    if processed_count > 0:
+        print(f"Successfully processed {processed_count} factor files.")
+    else:
+        print("No new factor files found or processed (they might already exist).")
 
 def download_and_process():
     # Define paths
@@ -74,7 +142,13 @@ def download_and_process():
             "url": "https://ops.fhwa.dot.gov/freight/freight_analysis/faf/faf_highway_assignment_results/FAF5_Model_Highway_Network.zip",
             "filename": "FAF5_Model_Highway_Network.zip",
             "csv_name": None # Network data is GDB/Shapefile, not CSV to convert
-        }
+        },
+    {
+        "name": "FAF5 County Factors",
+        "url": "https://www.bts.gov/sites/bts.dot.gov/files/docs/browse-statistical-products-and-data/freight-analysis-framework/320001/faf5_county_to_county_experimental_factors.zip",
+        "filename": "FAF5_County_Factors.zip",
+        "csv_name": None # Contains multiple CSVs
+    }
     ]
     
     for dataset in datasets:
@@ -219,6 +293,34 @@ def download_and_process():
                     print(f"Error converting Shapefile: {e}")
             else:
                 print("No suitable shapefile found after extraction.")
+
+        elif dataset["name"] == "FAF5 County Factors":
+            # Organize county factors
+            factors_dir = data_dir / "county_factors"
+            factors_dir.mkdir(exist_ok=True)
+            
+            print("Organizing county factors...")
+            # Move CSVs from extracted root/subdir to factors_dir
+            # The zip likely contains a folder or loose CSVs
+            for csv_file in data_dir.rglob("faf5_cat_factors_*.csv"):
+                # Convert to parquet immediately for speed
+                parquet_name = csv_file.stem + ".parquet"
+                parquet_path = factors_dir / parquet_name
+                
+                if not parquet_path.exists():
+                    print(f"Converting {csv_file.name} to Parquet...")
+                    try:
+                        # These files can be large, use chunks or efficient types if needed
+                        # They are relatively clean standard CSVs
+                        df = pd.read_csv(csv_file)
+                        df.to_parquet(parquet_path)
+                        print(f"Saved to {parquet_path}")
+                        csv_file.unlink() # Remove csv to save space
+                    except Exception as e:
+                        print(f"Error converting {csv_file.name}: {e}")
+                else:
+                    print(f"{parquet_path.name} already exists.")
+                    if csv_file.exists(): csv_file.unlink()
 
 if __name__ == "__main__":
     download_and_process()
