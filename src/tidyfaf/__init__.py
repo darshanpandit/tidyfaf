@@ -30,10 +30,32 @@ from .query import FAFQuery, StateQuery, NetworkQuery, ForecastQuery
 
 # Global discovery functions
 from .metadata import FAFMetadata
+from .download import download_and_process
+from pathlib import Path
+import sys
+
+# Ensure data is available
+_data_dir = Path.home() / ".tidyfaf_data"
+_metadata_file = _data_dir / "FAF5_metadata.xlsx"
+
+if not _metadata_file.exists():
+    print(f"FAF data not found in {_data_dir}. Downloading now... (This may take a few minutes)")
+    try:
+        download_and_process()
+    except Exception as e:
+        print(f"Error downloading FAF data: {e}", file=sys.stderr)
+        # Proceeding might fail, but we let FAFMetadata raise the specific error
 
 # Create global metadata instance for discovery functions
-_metadata = FAFMetadata()
+try:
+    _metadata = FAFMetadata()
+except FileNotFoundError:
+    # Fallback if download failed or was interrupted
+    _metadata = None
 
+def _check_metadata():
+    if _metadata is None:
+        raise RuntimeError("FAF Metadata is not available. Please run tidyfaf.download_and_process() to setup data.")
 
 def available_commodities(search=None):
     """
@@ -53,6 +75,7 @@ def available_commodities(search=None):
     --------
     >>> faf.available_commodities(search='electronics')
     """
+    _check_metadata()
     df = _metadata.commodities.copy()
     if search:
         df = df[df.astype(str).apply(
@@ -79,6 +102,7 @@ def available_zones(search=None):
     --------
     >>> faf.available_zones(search='washington')
     """
+    _check_metadata()
     df = _metadata.zones.copy()
     if search:
         df = df[df.astype(str).apply(
@@ -105,6 +129,7 @@ def available_states(search=None):
     --------
     >>> faf.available_states(search='california')
     """
+    _check_metadata()
     df = _metadata.states.copy()
     if search:
         df = df[df.astype(str).apply(
@@ -126,6 +151,7 @@ def available_modes():
     --------
     >>> faf.available_modes()
     """
+    _check_metadata()
     return _metadata.modes.copy()
 
 
@@ -139,7 +165,7 @@ from .download import download_and_process
 from .query.cache import clear_cache, clear_all_caches
 
 # Version
-__version__ = '0.1.1'
+__version__ = '0.1.2'
 
 __all__ = [
     # Query builders (primary API)

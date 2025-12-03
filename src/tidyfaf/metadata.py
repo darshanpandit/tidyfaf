@@ -7,7 +7,7 @@ class FAFMetadata:
     """
     def __init__(self, data_dir=None):
         if data_dir is None:
-            self.data_dir = Path(__file__).resolve().parent.parent.parent / "data"
+            self.data_dir = Path.home() / ".tidyfaf_data"
         else:
             self.data_dir = Path(data_dir)
             
