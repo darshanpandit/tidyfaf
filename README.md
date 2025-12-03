@@ -368,6 +368,6 @@ If you use this package in research, please cite:
 @software{tidyfaf2025,
   title = {tidyfaf: Tidy access to FAF freight flow data},
   year = {2025},
-  url = {https://github.com/yourusername/tidyfaf}
+  url = {https://github.com/darshanpandit/tidyfaf}
 }
 ```
