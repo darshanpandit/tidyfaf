@@ -165,7 +165,7 @@ from .download import download_and_process
 from .query.cache import clear_cache, clear_all_caches
 
 # Version
-__version__ = '0.1.2'
+__version__ = '0.1.3'
 
 __all__ = [
     # Query builders (primary API)
